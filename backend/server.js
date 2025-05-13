@@ -6,6 +6,8 @@ import { v2 as cloudinary } from "cloudinary";
 import multer from "multer";
 const upload = multer({ dest: "uploads/" });
 
+// middlware cors express multer all are same
+
 // cloudinary Configuration
 cloudinary.config({
   cloud_name: "dlrl4k1pe",
@@ -63,10 +65,10 @@ const BannerTable = mongoose.model("BannerTable", bannerSchema);
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   description: { type: String, required: true },
-  previosPrice: { type: Number, required: true },
+  previousPrice: { type: Number, required: true },
   currentPrice: { type: Number, required: true },
   rating: { type: Number, required: true },
-  categoty: {
+  category: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "CategoryTable",
     required: true,
@@ -346,6 +348,165 @@ app.delete("/api/banner/:id", async (req, res) => {
       success: true,
       msg: "Delete banner successfully",
       data: deleteBanner,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      msg: "Something went wrong",
+      data: null,
+    });
+  }
+});
+
+// product roures
+// create product
+app.post("/api/products", upload.single("imageUrl"), async (req, res) => {
+  console.log(req.file);
+
+  try {
+    const productAlreadyExist = await ProductTable.findOne({
+      name: req.body.name,
+    });
+    if (productAlreadyExist) {
+      return res.status(409).json({
+        success: false,
+        msg: " name already exist ",
+        data: null,
+      });
+    }
+
+    const uploadResult = await cloudinary.uploader
+      .upload(req.file.path)
+      .catch((error) => {
+        return res.status(500).json({
+          success: false,
+          msg: "image upload failed",
+          data: null,
+          error,
+        });
+      });
+
+    const newlyCreatedProducts = await ProductTable.create({
+      ...req.body,
+      imageUrl: uploadResult.secure_url,
+    });
+    return res.status(201).json({
+      success: true,
+      msg: "product created successfully",
+      data: newlyCreatedProducts,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      msg: "Something went wrong",
+      data: null,
+    });
+  }
+});
+
+// get all
+app.get("/api/products", async (req, res) => {
+  try {
+    const allProduct = await ProductTable.find();
+    return res.status(200).json({
+      success: true,
+      msg: " Fetch all products successfully",
+      data: allProduct,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      msg: "Something went wrong",
+      data: null,
+    });
+  }
+});
+
+// get singel
+app.get("/api/products/:id", async (req, res) => {
+  try {
+    const singleProduct = await ProductTable.findById(req.params.id);
+
+    if (!singleProduct) {
+      return res.status(404).json({
+        success: false,
+        msg: "Not found",
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      msg: "Fetch single product successfully",
+      data: singleProduct,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      msg: "Something went wrong",
+      data: null,
+    });
+  }
+});
+
+// update products
+app.patch("/api/products/:id", upload.single("imageUrl"), async (req, res) => {
+  try {
+    // if user upload new image
+    if (req.file) {
+      const uploadResult = await cloudinary.uploader
+        .upload(req.file.path)
+        .catch((error) => {
+          return res.status(500).json({
+            success: false,
+            msg: "image upload failed",
+            data: null,
+            error,
+          });
+        });
+
+      const updatedProduct = await ProductTable.findByIdAndUpdate(
+        req.params.id,
+        { ...req.body, imageUrl: uploadResult.secure_url },
+        { new: true }
+      );
+      return res.status(200).json({
+        success: true,
+        msg: "Product upadated successfully",
+        data: updatedProduct,
+      });
+    }
+
+    // if user not upload th image
+
+    const updatedProduct = await ProductTable.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    return res.status(200).json({
+      success: true,
+      msg: "Product upadated successfullt",
+      data: updatedProduct,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      msg: "Something went wrong",
+      data: null,
+    });
+  }
+});
+
+// delete products
+app.delete("/api/products", async (req, res) => {
+  try {
+    const deletedProducts = await ProductTable.findByIdAndDelete(req.params.id);
+
+    return res.status(200).json({
+      success: true,
+      msg: "product deleted successfully",
+      data: deletedProducts,
     });
   } catch (error) {
     return res.status(500).json({
