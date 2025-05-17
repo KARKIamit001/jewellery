@@ -1,13 +1,14 @@
 import express from "express"; // it help javascript to run server (node.js) (it create the environment)
 import cors from "cors"; // it handle whom to give and not give the data (middleware)
-import mongoose from "mongoose"; 
-import { v2 as cloudinary } from "cloudinary";// for the image
+import mongoose from "mongoose";
+import { v2 as cloudinary } from "cloudinary"; // for the image
 
 // hide the password
 import bcrypt from "bcrypt";
 const saltRounds = 10;
 
 // jwt jason web token
+import jwt from "jsonwebtoken";
 
 import multer from "multer";
 const upload = multer({ dest: "uploads/" });
@@ -540,14 +541,16 @@ app.delete("/api/products", async (req, res) => {
 // create/ register / signUp user
 app.post("/api/users/register", async (req, res) => {
   try {
-    const userExistWithEmail = await UserTable.findOne({
+
+      const userExistWithEmail = await UserTable.findOne({
       email: req.body.email,
     });
     if (userExistWithEmail) {
       return res.status(409).json({
         success: false,
-        msg: "user already exist with this eamil please choose another email",
+        msg: "user already exist with this email please choose another email",
         data: null,
+        
       });
     }
 
@@ -559,6 +562,7 @@ app.post("/api/users/register", async (req, res) => {
         success: false,
         msg: "username already taken please choose another username",
         data: null,
+       
       });
     }
 
@@ -570,10 +574,10 @@ app.post("/api/users/register", async (req, res) => {
         success: false,
         msg: "Phone Number already taken please choose another phone number",
         data: null,
+       
       });
     }
 
-    console.log(req.body);
     const salt = bcrypt.genSaltSync(saltRounds);
     const hashedPassword = bcrypt.hashSync(req.body.password, salt);
 
@@ -597,31 +601,81 @@ app.post("/api/users/register", async (req, res) => {
 });
 
 // 2 login sign in
-app.post("/api/users/login", async (req, res) => {});
+app.post("/api/users/login", async (req, res) => {
+  try {
+
+    const userExist = await UserTable.findOne({email: req.body.email})
+    if(!userExist) {
+      return res.status(404).json({
+        success: false,
+        msg: "Please register before login",
+        data: null
+
+      })
+    }
+
+
+    const passwordMatch =await bcrypt.compare(req.body.password, userExist.password)
+    console.log(passwordMatch)
+
+    if (!passwordMatch) {
+      return res.status(403).json({
+        success: false,
+        msg: "Password doesnot match",
+        data: null
+      })
+    }
+
+
+    const myToken = jwt.sign({ data: req.body.email }, "secret", {
+      expiresIn: "24h",
+    });
+    return res.status(200).json({
+      success: true,
+      msg: "login successful0",
+      token: myToken
+    })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      msg: "Something went wrong",
+      data: null,
+      error,
+    });
+  }
+});
 
 // 3 update user and change password
 app.patch("/api/users/update/:id", async (req, res) => {
   try {
-   // user trying to change password
+    // user trying to change password
     if (req.body.password) {
-       const salt =  bcrypt.genSaltSync(saltRounds)
-       const newHaashedPassword = bcrypt.hashSync(req.body.password, salt)
-       console.log(newHaashedPassword)
+      const salt = bcrypt.genSaltSync(saltRounds);
+      const newHaashedPassword = bcrypt.hashSync(req.body.password, salt);
+      console.log(newHaashedPassword);
 
-       const updatedUser = await UserTable.findByIdAndUpdate(req.params.id, {...req.body, password:newHaashedPassword}, {new:true})
-       return res.status(200).json({
+      const updatedUser = await UserTable.findByIdAndUpdate(
+        req.params.id,
+        { ...req.body, password: newHaashedPassword },
+        { new: true }
+      );
+      return res.status(200).json({
         success: true,
         msg: "User updated successfully",
-        data: updatedUser
-       })
+        data: updatedUser,
+      });
     }
 
-    const updatedUser = await UserTable.findByIdAndUpdate(req.params.id, req.body, {new: true})
+    const updatedUser = await UserTable.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
     return res.status(200).json({
       success: true,
-      msg:"User updated successfully",
-      data: updatedUser
-    })
+      msg: "User updated successfully",
+      data: updatedUser,
+    });
   } catch (error) {
     return res.status(500).json({
       success: false,
