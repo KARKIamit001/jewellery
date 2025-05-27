@@ -29,7 +29,7 @@ const app = express();
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:3000", ""]
+    origin: ["http://localhost:3000", " http://localhost:4000   "],
   })
 );
 
@@ -98,57 +98,91 @@ const userSchema = new mongoose.Schema({
 
 const UserTable = mongoose.model("UserTable", userSchema);
 
-// category routes
+// verify token middleware
+const verifyToken = (req, res, next) => {
+  const token = req.headers["authorization"];
+  console.log(token);
 
-// creATE
-app.post("/api/category", upload.single("imageUrl"), async (req, res) => {
-  try {
-    const categoryAlreadyExist = await CategoryTable.findOne({
-      name: req.body.name,
+  if (!token) {
+   return res.status(401).json({
+      msg: "You are not authenticated",
     });
-    if (categoryAlreadyExist) {
-      return res.status(409).json({
-        success: false,
-        msg: "Name already exist",
-        data: null,
+  }
+
+  const pureTOken = token.split(" ")[1];
+  console.log(pureTOken);
+
+  // verify a token symmetric
+  jwt.verify(pureTOken, "secret1234", function (err, decoded) {
+    if (err) {
+      return res.status(403).json({
+        msg: " you are not authorized",
       });
     }
 
-    console.log(req.file);
+    next();
+    console.log(decoded.foo); // bar
+  });
+};
 
-    // image iupload function
 
-    const uploadResult = await cloudinary.uploader
-      .upload(req.file.path)
-      .catch((error) => {
-        return res.status(500).json({
-          success: false,
-          msg: "image upload failed",
-          data: null,
-          error,
-        });
+
+// category routes
+
+// creATE
+app.post(
+  "/api/category",
+  verifyToken,
+  upload.single("imageUrl"),
+  async (req, res) => {
+    try {
+      const categoryAlreadyExist = await CategoryTable.findOne({
+        name: req.body.name,
       });
+      if (categoryAlreadyExist) {
+        return res.status(409).json({
+          success: false,
+          msg: "Name already exist",
+          data: null,
+        });
+      }
 
-    console.log(uploadResult.secure_url);
+      console.log(req.file);
 
-    const newlyCreatedCategory = await CategoryTable.create({
-      ...req.body,
-      imageUrl: uploadResult.secure_url,
-    });
-    return res.status(201).json({
-      success: true,
-      msg: "category created successfully",
-      data: newlyCreatedCategory,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      msg: "SOmethign went wrong",
-      data: null,
-      error,
-    });
+      // image iupload function
+
+      const uploadResult = await cloudinary.uploader
+        .upload(req.file.path)
+        .catch((error) => {
+          return res.status(500).json({
+            success: false,
+            msg: "image upload failed",
+            data: null,
+            error,
+          });
+        });
+
+      console.log(uploadResult.secure_url);
+
+      const newlyCreatedCategory = await CategoryTable.create({
+        ...req.body,
+        imageUrl: uploadResult.secure_url,
+      });
+      return res.status(201).json({
+        success: true,
+        msg: "category created successfully",
+        data: newlyCreatedCategory,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        msg: "SOmethign went wrong",
+        data: null,
+        error,
+      });
+    }
   }
-});
+);
 
 // get-LL
 app.get("/api/category", async (req, res) => {
@@ -189,7 +223,7 @@ app.get("/api/category/:id", async (req, res) => {
 });
 
 // u[date]
-app.patch("/api/category/:id", upload.single("imageUrl"), async (req, res) => {
+app.patch("/api/category/:id", verifyToken, upload.single("imageUrl"), async (req, res) => {
   try {
     if (req.file) {
       const uploadResult = await cloudinary.uploader
@@ -235,7 +269,7 @@ app.patch("/api/category/:id", upload.single("imageUrl"), async (req, res) => {
 });
 
 //de'ete
-app.delete("/api/category/:id", async (req, res) => {
+app.delete("/api/category/:id", verifyToken, async (req, res) => {
   try {
     const deletedCategory = await CategoryTable.findByIdAndDelete(
       req.params.id
@@ -257,7 +291,7 @@ app.delete("/api/category/:id", async (req, res) => {
 
 //bnner routes
 // creATE
-app.post("/api/banner", upload.single("imageUrl"), async (req, res) => {
+app.post("/api/banner", verifyToken, upload.single("imageUrl"), async (req, res) => {
   try {
     // image iupload function
 
@@ -351,7 +385,7 @@ app.patch("/ams/banner/:id", async (req, res) => {
 });
 
 //de'ete
-app.delete("/api/banner/:id", async (req, res) => {
+app.delete("/api/banner/:id", verifyToken, async (req, res) => {
   try {
     const deleteBanner = await BannerTable.findByIdAndDelete(req.params.id);
 
@@ -469,7 +503,7 @@ app.get("/api/products/:id", async (req, res) => {
 });
 
 // update products
-app.patch("/api/products/:id", upload.single("imageUrl"), async (req, res) => {
+app.patch("/api/products/:id", verifyToken, upload.single("imageUrl"), async (req, res) => {
   try {
     // if user upload new image
     if (req.file) {
@@ -518,7 +552,7 @@ app.patch("/api/products/:id", upload.single("imageUrl"), async (req, res) => {
 });
 
 // delete products
-app.delete("/api/products", async (req, res) => {
+app.delete("/api/products", verifyToken, async (req, res) => {
   try {
     const deletedProducts = await ProductTable.findByIdAndDelete(req.params.id);
 
@@ -541,8 +575,7 @@ app.delete("/api/products", async (req, res) => {
 // create/ register / signUp user
 app.post("/api/users/register", async (req, res) => {
   try {
-
-      const userExistWithEmail = await UserTable.findOne({
+    const userExistWithEmail = await UserTable.findOne({
       email: req.body.email,
     });
     if (userExistWithEmail) {
@@ -550,7 +583,6 @@ app.post("/api/users/register", async (req, res) => {
         success: false,
         msg: "user already exist with this email please choose another email",
         data: null,
-        
       });
     }
 
@@ -562,7 +594,6 @@ app.post("/api/users/register", async (req, res) => {
         success: false,
         msg: "username already taken please choose another username",
         data: null,
-       
       });
     }
 
@@ -574,7 +605,6 @@ app.post("/api/users/register", async (req, res) => {
         success: false,
         msg: "Phone Number already taken please choose another phone number",
         data: null,
-       
       });
     }
 
@@ -603,38 +633,37 @@ app.post("/api/users/register", async (req, res) => {
 // 2 login sign in
 app.post("/api/users/login", async (req, res) => {
   try {
-
-    const userExist = await UserTable.findOne({email: req.body.email})
-    if(!userExist) {
+    const userExist = await UserTable.findOne({ email: req.body.email });
+    if (!userExist) {
       return res.status(404).json({
         success: false,
         msg: "Please register before login",
-        data: null
-
-      })
+        data: null,
+      });
     }
 
-
-    const passwordMatch =await bcrypt.compare(req.body.password, userExist.password)
-    console.log(passwordMatch)
+    const passwordMatch = await bcrypt.compare(
+      req.body.password,
+      userExist.password
+    );
+    console.log(passwordMatch);
 
     if (!passwordMatch) {
       return res.status(403).json({
         success: false,
         msg: "Password doesnot match",
-        data: null
-      })
+        data: null,
+      });
     }
 
-
-    const myToken = jwt.sign({ data: req.body.email }, "secret", {
+    const myToken = jwt.sign({ data: req.body.email }, "secret1234", {
       expiresIn: "24h",
     });
     return res.status(200).json({
       success: true,
       msg: "login successful0",
-      token: myToken
-    })
+      token: myToken,
+    });
   } catch (error) {
     return res.status(500).json({
       success: false,
